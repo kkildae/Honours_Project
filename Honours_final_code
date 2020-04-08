@@ -1,0 +1,164 @@
+#Import packages
+# Packages for analysis
+import pandas as pd
+import numpy as np
+from sklearn import svm
+
+# Pickle package
+import pickle
+import serial
+import csv
+
+#Open serial port
+ser = serial.Serial('COM7', 9600, timeout =1)
+
+#Initiate variables
+emgswitch = 1
+emg1 = 0
+emg2 = 0
+old_emg1 = 0
+old_emg2 = 0.0
+Count = 0
+Old_emg2 = 0
+i = 0
+
+#Opens the CSV file then appends new data classified by the SVM model
+with open('Training_Data.csv', 'a', newline='') as csvfile:
+    
+    #Classifies the CSV fields and activates the writer to add new data
+    fieldnames = ['Class1','Class2','Count','emg1', 'emg2','old_emg1','Old_emg2']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    
+        
+    # Read saved gesture data
+    Training_Data = pd.read_csv('Training_Data.csv')
+    
+    # Specify inputs for the model
+    # Training_Data data put in array for SVM model
+    csvData = Training_Data[['emg1','emg2']].as_matrix()
+    
+    # Feature names
+    data_features = Training_Data.columns.values[1:].tolist()
+    data_features
+    
+    #Infinite loop
+    while 1:
+        
+        #read serial port and decode it
+        arduinodata = ser.readline().strip()
+        values = arduinodata.decode('utf-8')
+        
+        # Fit the SVM models
+        type_label = np.where(Training_Data['Class1']=='Index', 0, 1)
+        model = svm.SVC(kernel='linear', C=1, gamma=2**-5)
+        model.fit(csvData, type_label)
+        
+        type_label1 = np.where(Training_Data['Class2']=='Up', 0, 1)
+        model1 = svm.SVC(kernel='linear', C=1)
+        model1.fit(csvData, type_label1)
+        
+        
+        #Switch to allow the loop to not activate the rest of the code until both emgs have data from the serial port
+        if emgswitch == 1:
+            
+            old_emg1 = emg1
+            
+            emg1 = values
+            
+            emgswitch = 0
+            
+        else:
+            
+            old_emg2 = emg2
+            
+            emg2 = values
+            
+            emgswitch= 1
+            
+        #When both emgs have new values
+        if old_emg1 != emg1 and old_emg2 != emg2:
+            
+            #Adds to the count to know when the data happened
+            i = i+1
+            
+            #Calls the function that contains the SVMs' prediction of the data
+            New_Class1 = index_or_thumb(emg1, emg2)
+            
+            #Tells the direction the index finger is moving
+            if New_Class1 == 'Index':
+                
+                New_Class2 = direction(emg1, emg2)
+                
+            else:
+                
+                New_Class2 = 'Flick'
+                
+                print(New_Class2)
+            
+            #creates csv to write arduino data into
+            writer.writerow({'Class1': (New_Class1),'Class2': (New_Class2),'Count': i,'emg1': emg1, 'emg2': emg2, 'old_emg1': old_emg1, 'Old_emg2': old_emg2})
+             
+            #Resets count after 10 for a set of 10
+            if i == 10:
+                i = 0
+                
+            #Determines the amount of pressure from the emg
+            if New_Class1 == 'Index':
+                
+                if emg1 < '1':
+                    
+                    print ('Pressure: Low')
+                    
+                elif emg1 < '2':
+                    
+                    print ('Pressure: Medium')
+                    
+                else:
+                    
+                    print ('Pressure: High')
+                    
+            else:
+                if emg2 < '1':
+                    
+                    print ('Pressure: Low')
+                    
+                elif emg2 < '2':
+                    
+                    print ('Pressure: Medium')
+                    
+                else:
+                    
+                    print ('Pressure: High')
+
+        # Creates a function to guess what finger is being used
+        def index_or_thumb(emg1, emg2):
+            
+            if(model.predict([[emg1, emg2]]))==0:
+                
+                New_Class1 = 'Index'
+                
+                print(New_Class1)
+                
+            else:
+                New_Class1 = 'Thumb'
+                
+                print(New_Class1)
+                
+            return str(New_Class1)
+        
+        # Creates a function to guess what direction the index finger moves
+        def direction(emg1, emg2):
+            
+            if(model1.predict([[emg1, emg2]]))==0:
+                
+                New_Class2= 'Up'
+                
+                print(New_Class2)
+                
+            else:
+                
+                New_Class2= 'Down'
+                
+                print(New_Class2)
+                
+            return str(New_Class2)
