@@ -1,0 +1,36 @@
+#Import packages
+import serial
+import csv
+#open serial port
+ser = serial.Serial('COM7', 9600, timeout =1)
+emgswitch = 1
+emg1 = 0
+emg2 = 0
+old_emg1 = 0
+old_emg2 = 0
+emg1sample = ""
+emg2sample = ""
+i = 1
+with open('test.csv', 'w', newline='') as csvfile:
+    fieldnames = ['Class1','Class2','Count','emg1', 'emg2']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+    #Infinite loop
+    while 1:
+        while i < 10:
+            #read serial port and decode it
+            arduinodata = ser.readline().strip()
+            values = arduinodata.decode('utf-8')
+            #prints data from arduino
+            if emgswitch == 1:
+                emg1 = values
+                emg1sample = emg1sample + (100 * emg1)
+                emgswitch = 0
+            else:
+                emg2 = values
+                emg2sample = emg2sample + (100 * emg2)
+                emgswitch = 1
+            print (int(emg1sample)        
+        #creates csv to write arduino data into
+        writer.writerow({'Class1': 'Index ','Class2': 'Up','Count': i,'emg1': emg1sample, 'emg2': emg2sample})
+        i = 1
